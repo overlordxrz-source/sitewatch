@@ -17,7 +17,11 @@ function getSupabase() {
 
 export async function GET(req: NextRequest) {
   const secret = req.headers.get('x-cron-secret') ?? req.nextUrl.searchParams.get('secret')
-  if (secret !== process.env.CRON_SECRET) {
+  const vercelCronHeader = req.headers.get('authorization')
+  const isVercelCron = vercelCronHeader === `Bearer ${process.env.CRON_SECRET}`
+  const isValidSecret = secret === process.env.CRON_SECRET
+
+  if (!isValidSecret && !isVercelCron) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
