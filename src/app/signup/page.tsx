@@ -5,14 +5,20 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Sign Up' }
 
-export default function SignupPage() {
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>
+}) {
+  const { error } = await searchParams
+
   async function signup(formData: FormData) {
     'use server'
     const supabase = await createClient()
     const email = formData.get('email') as string
     const password = formData.get('password') as string
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -21,10 +27,25 @@ export default function SignupPage() {
     })
 
     if (error) {
-      redirect(`/signup?error=${encodeURIComponent(error.message)}`)
+      let msg = error.message
+      if (msg.includes('already registered') || msg.includes('already been registered')) {
+        msg = 'An account with that email already exists. Try signing in instead.'
+      }
+      if (msg.includes('Password should be')) {
+        msg = 'Password must be at least 6 characters.'
+      }
+      redirect(`/signup?error=${encodeURIComponent(msg)}`)
     }
 
-    redirect('/dashboard')
+    // If email confirmation is disabled, user is logged in immediately
+    if (data.session) {
+      redirect('/dashboard')
+    }
+
+    // Email confirmation is enabled — send to login with a helpful message
+    redirect(
+      `/login?message=${encodeURIComponent('Account created! Check your email to confirm, then sign in.')}`
+    )
   }
 
   return (
@@ -48,6 +69,16 @@ export default function SignupPage() {
         </div>
 
         <div className="card p-8">
+          {/* Error banner */}
+          {error && (
+            <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 mb-5">
+              <svg className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+              <p className="text-sm text-red-400">{error}</p>
+            </div>
+          )}
+
           <form action={signup} className="space-y-5">
             <div>
               <label htmlFor="email" className="label">Email address</label>
@@ -70,8 +101,8 @@ export default function SignupPage() {
                 type="password"
                 required
                 autoComplete="new-password"
-                placeholder="Min. 8 characters"
-                minLength={8}
+                placeholder="Min. 6 characters"
+                minLength={6}
                 className="input"
               />
             </div>

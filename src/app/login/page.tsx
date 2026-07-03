@@ -5,11 +5,13 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Sign In' }
 
-export default function LoginPage({
+export default async function LoginPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string; message?: string }>
 }) {
+  const { error, message } = await searchParams
+
   async function login(formData: FormData) {
     'use server'
     const supabase = await createClient()
@@ -18,14 +20,17 @@ export default function LoginPage({
 
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
-      redirect(`/login?error=${encodeURIComponent(error.message)}`)
+      // Make the error message human-friendly
+      let msg = error.message
+      if (msg.includes('Invalid login credentials')) msg = 'Wrong email or password.'
+      if (msg.includes('Email not confirmed')) msg = 'Please confirm your email first — check your inbox.'
+      redirect(`/login?error=${encodeURIComponent(msg)}`)
     }
     redirect('/dashboard')
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-[--color-surface-0]">
-      {/* Background glow */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-20%] left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-brand-600/10 rounded-full blur-3xl" />
       </div>
@@ -46,8 +51,26 @@ export default function LoginPage({
         </div>
 
         <div className="card p-8">
-          {/* Error / message */}
-          {/* We'll read these via client since server params need await in Next 15 */}
+          {/* Error banner */}
+          {error && (
+            <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 mb-5">
+              <svg className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+              <p className="text-sm text-red-400">{error}</p>
+            </div>
+          )}
+
+          {/* Success banner */}
+          {message && (
+            <div className="flex items-start gap-3 bg-green-500/10 border border-green-500/20 rounded-lg px-4 py-3 mb-5">
+              <svg className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm text-green-400">{message}</p>
+            </div>
+          )}
+
           <form action={login} className="space-y-5">
             <div>
               <label htmlFor="email" className="label">Email address</label>
