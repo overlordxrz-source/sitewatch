@@ -40,7 +40,8 @@ export async function GET(req: NextRequest) {
 
   const results: { id: string; name: string; was_up: boolean; is_up: boolean }[] = []
   const now = new Date()
-  const isHourlyRun = now.getMinutes() < 5 // run SSL/domain checks once per hour
+  // Domain RDAP is slow — only run once per day (at midnight hour)
+  const isDailyRun = now.getUTCHours() === 0 && now.getUTCMinutes() < 10
 
   for (const monitor of (monitors as Monitor[])) {
     try {
@@ -109,27 +110,26 @@ export async function GET(req: NextRequest) {
 
       results.push({ id: monitor.id, name: monitor.name, was_up: prevStatus === 'up', is_up: httpResult.is_up })
 
-      // ---- SSL + Domain checks (once per hour) ----
-      if (isHourlyRun) {
-        // SSL
-        const sslResult = await checkSsl(monitor.url)
-        await supabase.from('ssl_info').insert({
-          monitor_id: monitor.id,
-          checked_at: now.toISOString(),
-          valid: sslResult.valid,
-          issuer: sslResult.issuer,
-          subject: sslResult.subject,
-          expires_at: sslResult.expires_at?.toISOString() ?? null,
-          days_remaining: sslResult.days_remaining,
-        })
+      // ---- SSL check (every run) ----
+      const sslResult = await checkSsl(monitor.url)
+      await supabase.from('ssl_info').insert({
+        monitor_id: monitor.id,
+        checked_at: now.toISOString(),
+        valid: sslResult.valid,
+        issuer: sslResult.issuer,
+        subject: sslResult.subject,
+        expires_at: sslResult.expires_at?.toISOString() ?? null,
+        days_remaining: sslResult.days_remaining,
+      })
 
-        if (sslResult.days_remaining !== null) {
-          if (sslResult.days_remaining <= 7 || sslResult.days_remaining === 30) {
-            await sendSslExpiryAlert(monitor, sslResult.days_remaining)
-          }
+      if (sslResult.days_remaining !== null) {
+        if (sslResult.days_remaining <= 7 || sslResult.days_remaining === 30) {
+          await sendSslExpiryAlert(monitor, sslResult.days_remaining)
         }
+      }
 
-        // Domain
+      // ---- Domain check (once per day) ----
+      if (isDailyRun) {
         const domainResult = await checkDomain(monitor.url)
         if (domainResult.expires_at) {
           await supabase.from('domain_info').insert({
