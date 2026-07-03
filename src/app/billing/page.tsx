@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { stripe } from '@/lib/stripe'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 
@@ -6,22 +7,60 @@ export const metadata: Metadata = { title: 'Billing — SiteWatch' }
 
 async function startCheckout() {
   'use server'
-  const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/billing/checkout`, {
-    method: 'POST',
-    credentials: 'include',
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('stripe_customer_id')
+    .eq('id', user.id)
+    .single()
+
+  let customerId = profile?.stripe_customer_id
+
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      email: user.email,
+      metadata: { supabase_user_id: user.id },
+    })
+    customerId = customer.id
+    await supabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', user.id)
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    customer: customerId,
+    payment_method_types: ['card'],
+    mode: 'subscription',
+    line_items: [{ price: process.env.STRIPE_PRICE_ID!, quantity: 1 }],
+    success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?billing=success`,
+    cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing`,
+    subscription_data: { trial_period_days: 7 },
   })
-  const { url } = await res.json()
-  redirect(url)
+
+  redirect(session.url!)
 }
 
 async function openPortal() {
   'use server'
-  const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/billing/portal`, {
-    method: 'POST',
-    credentials: 'include',
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('stripe_customer_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.stripe_customer_id) redirect('/billing')
+
+  const session = await stripe.billingPortal.sessions.create({
+    customer: profile.stripe_customer_id,
+    return_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing`,
   })
-  const { url } = await res.json()
-  redirect(url)
+
+  redirect(session.url)
 }
 
 export default async function BillingPage() {
@@ -89,7 +128,6 @@ export default async function BillingPage() {
         </div>
 
         <div className="card p-8">
-          {/* Pricing card */}
           <div className="flex items-start justify-between mb-6">
             <div>
               <h2 className="text-white font-bold text-lg">SiteWatch Pro</h2>
