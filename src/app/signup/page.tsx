@@ -1,0 +1,98 @@
+import Link from 'next/link'
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = { title: 'Sign Up' }
+
+export default function SignupPage() {
+  async function signup(formData: FormData) {
+    'use server'
+    const supabase = await createClient()
+    const email = formData.get('email') as string
+    const password = formData.get('password') as string
+
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
+      },
+    })
+
+    if (error) {
+      redirect(`/signup?error=${encodeURIComponent(error.message)}`)
+    }
+
+    redirect('/dashboard')
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4 bg-[--color-surface-0]">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[-20%] left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-brand-600/10 rounded-full blur-3xl" />
+      </div>
+
+      <div className="w-full max-w-md relative">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center gap-2.5 mb-6">
+            <div className="w-8 h-8 bg-gradient-to-br from-brand-500 to-brand-700 rounded-lg flex items-center justify-center">
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+              </svg>
+            </div>
+            <span className="text-xl font-bold text-white tracking-tight">SiteWatch</span>
+          </div>
+          <h1 className="text-2xl font-bold text-white">Start monitoring</h1>
+          <p className="text-slate-400 text-sm mt-1">Create your free account in seconds</p>
+        </div>
+
+        <div className="card p-8">
+          <form action={signup} className="space-y-5">
+            <div>
+              <label htmlFor="email" className="label">Email address</label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                autoComplete="email"
+                placeholder="you@example.com"
+                className="input"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="password" className="label">Password</label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                autoComplete="new-password"
+                placeholder="Min. 8 characters"
+                minLength={8}
+                className="input"
+              />
+            </div>
+
+            <button type="submit" className="btn-primary w-full py-2.5 text-base">
+              Create account
+            </button>
+
+            <p className="text-center text-xs text-slate-500">
+              By signing up you agree to our Terms of Service and Privacy Policy.
+            </p>
+          </form>
+        </div>
+
+        <p className="text-center text-sm text-slate-500 mt-6">
+          Already have an account?{' '}
+          <Link href="/login" className="text-brand-400 hover:text-brand-300 font-medium transition-colors">
+            Sign in
+          </Link>
+        </p>
+      </div>
+    </div>
+  )
+}
