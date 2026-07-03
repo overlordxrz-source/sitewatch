@@ -1,69 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
-import { stripe } from '@/lib/stripe'
 import { redirect } from 'next/navigation'
+import { SubscribeButton, ManageButton } from '@/components/BillingButtons'
 import type { Metadata } from 'next'
 
 export const runtime = 'nodejs'
-
 export const metadata: Metadata = { title: 'Billing — SiteWatch' }
-
-async function startCheckout() {
-  'use server'
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('stripe_customer_id')
-    .eq('id', user.id)
-    .single()
-
-  let customerId = profile?.stripe_customer_id
-
-  if (!customerId) {
-    const customer = await stripe.customers.create({
-      email: user.email,
-      metadata: { supabase_user_id: user.id },
-    })
-    customerId = customer.id
-    await supabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', user.id)
-  }
-
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    payment_method_types: ['card'],
-    mode: 'subscription',
-    line_items: [{ price: process.env.STRIPE_PRICE_ID!, quantity: 1 }],
-    success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?billing=success`,
-    cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing`,
-    subscription_data: { trial_period_days: 7 },
-  })
-
-  redirect(session.url!)
-}
-
-async function openPortal() {
-  'use server'
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('stripe_customer_id')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile?.stripe_customer_id) redirect('/billing')
-
-  const session = await stripe.billingPortal.sessions.create({
-    customer: profile.stripe_customer_id,
-    return_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing`,
-  })
-
-  redirect(session.url)
-}
 
 export default async function BillingPage() {
   const supabase = await createClient()
@@ -72,7 +13,7 @@ export default async function BillingPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('subscription_status, trial_ends_at, stripe_subscription_id')
+    .select('subscription_status, trial_ends_at')
     .eq('id', user.id)
     .single()
 
@@ -161,20 +102,14 @@ export default async function BillingPage() {
           </ul>
 
           {isActive ? (
-            <form action={openPortal}>
-              <button type="submit" className="btn-secondary w-full py-3 text-base">
-                Manage subscription
-              </button>
-            </form>
+            <ManageButton />
           ) : (
-            <form action={startCheckout}>
-              <button type="submit" className="btn-primary w-full py-3 text-base">
-                {isTrialing ? 'Subscribe — €29/month' : 'Re-activate — €29/month'}
-              </button>
-              <p className="text-center text-xs text-slate-500 mt-3">
+            <div className="space-y-3">
+              <SubscribeButton isTrialing={isTrialing} />
+              <p className="text-center text-xs text-slate-500">
                 {isTrialing ? 'No charge until your trial ends. Cancel anytime.' : 'Cancel anytime from your billing portal.'}
               </p>
-            </form>
+            </div>
           )}
         </div>
       </div>
