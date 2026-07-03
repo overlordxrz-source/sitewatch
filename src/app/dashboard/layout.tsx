@@ -22,6 +22,20 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   if (!user) redirect('/login')
 
+  // Check subscription
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('subscription_status, trial_ends_at')
+    .eq('id', user.id)
+    .single()
+
+  const status = profile?.subscription_status ?? 'trialing'
+  const trialEnds = profile?.trial_ends_at ? new Date(profile.trial_ends_at) : null
+  const trialActive = trialEnds ? trialEnds > new Date() : false
+  const hasAccess = status === 'active' || (status === 'trialing' && trialActive)
+
+  if (!hasAccess) redirect('/billing')
+
   async function logout() {
     'use server'
     const supabase = await createClient()
@@ -56,6 +70,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0H3" />
             </svg>
             Monitors
+          </NavLink>
+          <NavLink href="/billing">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+            </svg>
+            Billing
           </NavLink>
         </nav>
 
