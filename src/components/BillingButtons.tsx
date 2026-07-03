@@ -8,12 +8,17 @@ export function SubscribeButton({ isTrialing }: { isTrialing: boolean }) {
 
   async function handleClick() {
     setLoading(true)
-    const res = await fetch('/api/billing/checkout', { method: 'POST' })
-    const data = await res.json()
-    if (data.url) {
-      window.location.href = data.url
-    } else {
-      alert('Something went wrong. Please try again.')
+    try {
+      const res = await fetch('/api/billing/checkout', { method: 'POST' })
+      const data = await res.json()
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        alert(`Error: ${data.error ?? 'No checkout URL returned'}`)
+        setLoading(false)
+      }
+    } catch (err) {
+      alert(`Network error: ${err}`)
       setLoading(false)
     }
   }
