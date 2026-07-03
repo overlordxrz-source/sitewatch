@@ -3,6 +3,8 @@ import { stripe } from '@/lib/stripe'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 
+export const runtime = 'nodejs'
+
 export const metadata: Metadata = { title: 'Billing — SiteWatch' }
 
 async function startCheckout() {
